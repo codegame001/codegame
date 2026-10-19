@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYSTEM ACCESS</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter (모던 UI용), JetBrains Mono (시스템용), Noto Serif KR (편지지용) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;700&family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Serif+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Nanum Gothic Coding', 'monospace'],
+                        serif: ['Noto Serif KR', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #050505;
+            color: #e5e5e5;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 화면에 딱 맞는 편지지: 높이는 화면에 맞추고(최대 1100px), 글씨는 화면 높이/너비에 맞춰 자동 조절 */
+        .letter-paper {
+            height: calc(100vh - 2rem);
+            height: calc(100dvh - 2rem);
+            max-height: 1100px;
+        }
+        .letter-text {
+            line-height: 2;
+            font-weight: 700;
+            font-size: 28px; /* JS(fitText)가 화면에 맞게 자동 조절 */
+        }
+
+        /* 낡은 편지지 질감 */
+        .aged-paper {
+            background-color: #e2dfd5;
+            background-image: 
+                radial-gradient(#d1ccc0 1px, transparent 0),
+                linear-gradient(to bottom, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.08) 100%);
+            background-size: 24px 24px, 100% 100%;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), inset 0 0 40px rgba(120, 110, 90, 0.25);
+            border: 1px solid #b5b0a3;
+            color: #1a1a1a;
+            font-family: 'Noto Serif KR', serif;
+        }
+
+        /* 편지지 내부 은은한 화살표 버튼 (종이 질감 스며듬) */
+        .paper-arrow-btn {
+            color: rgba(20, 18, 15, 0.85);
+            transition: color 0.2s ease, opacity 0.2s ease;
+        }
+        .paper-arrow-btn:hover:not(:disabled) {
+            color: rgba(0, 0, 0, 1);
+        }
+        .paper-arrow-btn:disabled {
+            opacity: 0.05;
+            cursor: default;
+        }
+
+        /* 시스템 오답 애니메이션 */
+        @keyframes systemFlash {
+            0%, 100% { border-color: #404040; }
+            50% { border-color: #ffffff; }
+        }
+        .flash-error {
+            animation: systemFlash 0.3s ease-in-out 2;
+        }
+
+        /* 페이드아웃 효과 */
+        .fade-out {
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+        }
+
+        /* 커스텀 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050505;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333333;
+        }
+    </style>
+</head>
+<body class="min-h-screen relative flex items-center justify-center p-4">
+
+    <!-- ================= 1. 모노크롬 모던 시스템 비밀번호 팝업 ================= -->
+    <div id="lockModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+        <div id="modalContent" class="w-full max-w-md bg-black border border-white/70 p-10 shadow-2xl relative text-center">
+            
+            <!-- 상단 상태 인디케이터 -->
+            <div class="flex items-center justify-between mb-8 border-b border-neutral-800 pb-3">
+                <span class="text-xs font-mono font-bold text-neutral-500 tracking-widest uppercase">SECURITY SYSTEM</span>
+                <span class="inline-block w-2 h-2 bg-white animate-pulse rounded-full"></span>
+            </div>
+
+            <!-- 시스템 지시 문구 (가운데 정렬) -->
+            <div class="mb-8">
+                <h1 class="text-xl md:text-2xl font-mono font-bold text-white tracking-tight text-center">
+                    비밀번호를 입력하시오.
+                </h1>
+            </div>
+
+            <!-- 비밀번호 입력 폼 -->
+            <form id="lockForm" onsubmit="handleAuth(event)" class="space-y-6">
+                <div class="relative">
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" id="passwordInput" placeholder="Password" maxlength="4" autocomplete="off" autofocus oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                        class="w-full bg-neutral-950 border border-neutral-700 focus:border-white text-center text-lg font-mono font-bold tracking-[0.3em] text-white py-3.5 px-4 outline-none transition-colors placeholder:font-mono placeholder:font-bold placeholder:tracking-normal placeholder:text-neutral-600 placeholder:text-base">
+                </div>
+
+                <!-- 시스템 경고 메시지 (가운데 정렬) -->
+                <div id="errorMessage" class="min-h-[20px] text-xs font-mono font-bold text-neutral-400 tracking-wider text-center opacity-0 transition-opacity">
+                    [오답] 비밀번호가 일치하지 않습니다.
+                </div>
+
+                <!-- 제출 버튼 -->
+                <button type="submit" 
+                    class="w-full bg-white hover:bg-neutral-200 text-black font-mono font-bold text-sm py-3.5 px-4 transition-colors tracking-wider uppercase border border-white">
+                    확인
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= 2. 중앙에 놓인 편지지 메인 컨텐츠 ================= -->
+    <main id="mainContent" class="w-full max-w-2xl py-0 flex flex-col items-center">
+        
+        <!-- 편지지 본체 -->
+        <article class="aged-paper letter-paper w-full px-8 py-8 md:px-14 md:py-10 relative flex flex-col justify-between rounded-sm">
+            
+            <!-- 편지지 내부 상단 화살표 내비게이션 (글자 없이 화살표 SVG만 배치) -->
+            <div class="absolute top-6 left-6 right-6 flex justify-between items-center z-10 pointer-events-none">
+                <button onclick="changePage(-1)" id="prevBtn" class="paper-arrow-btn pointer-events-auto p-2 outline-none" aria-label="Previous">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                </button>
+                <button onclick="changePage(1)" id="nextBtn" class="paper-arrow-btn pointer-events-auto p-2 outline-none" aria-label="Next">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 편지 내용 영역 (페이지별 전환 및 모든 글 가운데 정렬) -->
+            <div class="flex-1 text-black/90 letter-text font-serif whitespace-pre min-h-0 overflow-hidden flex items-center justify-center text-center">
+                
+                <!-- 페이지 1 -->
+                <div id="page1" class="page-content w-full">축하합니다.
+
+이 편지를 발견하셨다면 당신은
+모든 단서를 해결하고 조합하여
+마침내 4 자리의 비밀번호를
+풀어내었겠군요, 축하합니다.</div>
+
+                <!-- 페이지 2 -->
+                <div id="page2" class="page-content w-full hidden">뛰어난 실력을 가지고 계시군요
+재밌으셨나요? 머리가 아프셨나요?
+단서를 조합해 추리하고 해결하는 건
+참 재밌다고 생각하는 편입니다.</div>
+
+                <!-- 페이지 3 -->
+                <div id="page3" class="page-content w-full hidden">이것들은 전부 튜토리얼입니다.
+
+다음에도 또 뵙겠습니다.
+
+플레이어.</div>
+
+            </div>
+
+        </article>
+
+    </main>
+
+    <!-- 스크립트: 비밀번호 검증 및 페이지 전환 로직 -->
+    <script>
+        const CORRECT_PASS = "1009";
+        let currentPage = 1;
+        const totalPages = 3; // 총 페이지 수
+
+        // 비밀번호 제출 처리
+        function handleAuth(event) {
+            event.preventDefault();
+            
+            const inputField = document.getElementById('passwordInput');
+            const modalContent = document.getElementById('modalContent');
+            const errorMessage = document.getElementById('errorMessage');
+            const userEntered = inputField.value.trim();
+
+            if (userEntered === CORRECT_PASS) {
+                // 정답 처리
+                errorMessage.classList.add('opacity-0');
+                const modal = document.getElementById('lockModal');
+                modal.classList.add('fade-out');
+
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 400);
+
+            } else {
+                // 오답 처리
+                errorMessage.classList.remove('opacity-0');
+                modalContent.classList.remove('flash-error');
+                
+                void modalContent.offsetWidth; // DOM reflow
+                modalContent.classList.add('flash-error');
+                
+                inputField.value = '';
+                inputField.focus();
+            }
+        }
+
+        // 편지지 페이지 이동 로직
+        function changePage(direction) {
+            const newPage = currentPage + direction;
+            if (newPage < 1 || newPage > totalPages) return;
+
+            // 기존 페이지 숨기기
+            document.getElementById(`page${currentPage}`).classList.add('hidden');
+            
+            // 새 페이지 표시
+            currentPage = newPage;
+            document.getElementById(`page${currentPage}`).classList.remove('hidden');
+
+            // 화살표 활성화 상태 업데이트
+            updateNavState();
+            fitText();
+        }
+
+        // 모든 페이지가 들어가는 가장 큰 글자 크기를 찾아 통일해서 적용
+        function fitText() {
+            const box = document.querySelector('.letter-text');
+            if (!box) return;
+            const pages = document.querySelectorAll('.page-content');
+            const hiddenBefore = Array.from(pages).map(pg => pg.classList.contains('hidden'));
+            let best = 80;
+            pages.forEach(page => {
+                // 측정할 페이지만 보이게
+                pages.forEach(pg => pg.classList.toggle('hidden', pg !== page));
+                let lo = 10, hi = 80;
+                for (let i = 0; i < 14; i++) {
+                    const mid = (lo + hi) / 2;
+                    box.style.fontSize = mid + 'px';
+                    const fits = page.scrollHeight <= box.clientHeight * 0.9 &&
+                                 page.scrollWidth <= box.clientWidth;
+                    if (fits) lo = mid; else hi = mid;
+                }
+                best = Math.min(best, lo);
+            });
+            // 원래 표시 상태 복원
+            pages.forEach((pg, i) => pg.classList.toggle('hidden', hiddenBefore[i]));
+            box.style.fontSize = best + 'px';
+        }
+
+        function updateNavState() {
+            document.getElementById('prevBtn').disabled = (currentPage === 1);
+            document.getElementById('nextBtn').disabled = (currentPage === totalPages);
+        }
+
+        // 초기화
+        window.onload = function() {
+            updateNavState();
+            fitText();
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitText);
+        };
+        window.addEventListener('resize', fitText);
+    </script>
+</body>
+</html>

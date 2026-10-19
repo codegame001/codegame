@@ -164,25 +164,13 @@
             <div class="flex-1 text-black/90 letter-text font-serif whitespace-pre min-h-0 overflow-hidden flex items-center justify-center text-center">
                 
                 <!-- 페이지 1 -->
-                <div id="page1" class="page-content w-full">축하합니다.
-
-이 편지를 발견하셨다면 당신은
-모든 단서를 해결하고 조합하여
-마침내 4 자리의 비밀번호를
-풀어내었겠군요, 축하합니다.</div>
+                <div id="page1" class="page-content w-full"></div>
 
                 <!-- 페이지 2 -->
-                <div id="page2" class="page-content w-full hidden">뛰어난 실력을 가지고 계시군요
-재밌으셨나요? 머리가 아프셨나요?
-단서를 조합해 추리하고 해결하는 건
-참 재밌다고 생각하는 편입니다.</div>
+                <div id="page2" class="page-content w-full hidden"></div>
 
                 <!-- 페이지 3 -->
-                <div id="page3" class="page-content w-full hidden">이것들은 전부 튜토리얼입니다.
-
-다음에도 또 뵙겠습니다.
-
-플레이어.</div>
+                <div id="page3" class="page-content w-full hidden"></div>
 
             </div>
 
@@ -192,21 +180,53 @@
 
     <!-- 스크립트: 비밀번호 검증 및 페이지 전환 로직 -->
     <script>
-        const CORRECT_PASS = "1009";
+        const LOCKED = {"s":"EdbDQOMOH4Vr8nc/VU+4pA==","i":"Swb39izmtK0ZrDvm","c":"UUthEVznNPdWTJP/dtIlFTlgYNZhHpXBmD7pbpvTuvO5LNrnmgL9nbkl/H9qTujOWbsF3GrkhesNkY93syERFqThMxgA+RG/B3/OPxcWqj/1OB/8x5uKCRItyDh4JT+jmgQc9JMAJkmNL10+wKYOF3fSajqyFwbfI8PENjGSg087RhqJUUaiImJE0INKVDK506O5RHSyhdYgHEAyuK61eCDW+9LzUXLHzjcqgtMKuZOP5zr9rjKYkHJDFH5CUDWnFf50dCSdL0kOJ8wCez50hkY3M2fuGmLi258AiMmlaxYsGoQDLr5GjNNWLvPEYKLoPfU4GMHCOWhGafPiqSQ9cI2rb6aE7qYAwFU4x959uTN11JrLu/8LERbVFPKsiFZpWciC78ug+TFPE9zQQRR/baOt21Yzy0sA6FA5b8YV96JZWVe+G8JQlRGiQudUzZaCUuj7e4x12/KbUuyyaKiaIaoC35FfKCV5Jwprc/P9mllWB/fkhEiy1xblP4DIl/KBYCMx1YtAWWH4PFZ9pN6zszuehR/jVStkzvSFyIxs663llHrZC3OsHO6VuDGcd1Xv+daO3FQGhHUMx5MRvz5gicyIwE3YcYY8SpOKBXUf2CvlzJzUNJhaOOU2fRt2USbRGBYWUTKlrANjUbCr9UU=","n":600000};
         let currentPage = 1;
         const totalPages = 3; // 총 페이지 수
 
+        function b64(s) {
+            return Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+        }
+
+        // 비밀번호로 편지 내용을 복호화 (틀리면 예외 발생)
+        async function unlock(pass) {
+            const enc = new TextEncoder();
+            const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: b64(LOCKED.s), iterations: LOCKED.n, hash: 'SHA-256' },
+                base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+            );
+            const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(LOCKED.i) }, key, b64(LOCKED.c));
+            return JSON.parse(new TextDecoder().decode(plain));
+        }
+
+        let busy = false;
+
         // 비밀번호 제출 처리
-        function handleAuth(event) {
+        async function handleAuth(event) {
             event.preventDefault();
-            
+            if (busy) return;
+
             const inputField = document.getElementById('passwordInput');
             const modalContent = document.getElementById('modalContent');
             const errorMessage = document.getElementById('errorMessage');
             const userEntered = inputField.value.trim();
 
-            if (userEntered === CORRECT_PASS) {
-                // 정답 처리
+            busy = true;
+            let pages = null;
+            try {
+                pages = await unlock(userEntered);
+            } catch (e) {
+                pages = null;
+            }
+            busy = false;
+
+            if (pages) {
+                // 정답 처리: 복호화된 내용을 채워 넣음
+                pages.forEach((text, i) => {
+                    document.getElementById('page' + (i + 1)).textContent = text;
+                });
+                fitText();
                 errorMessage.classList.add('opacity-0');
                 const modal = document.getElementById('lockModal');
                 modal.classList.add('fade-out');
@@ -219,10 +239,10 @@
                 // 오답 처리
                 errorMessage.classList.remove('opacity-0');
                 modalContent.classList.remove('flash-error');
-                
+
                 void modalContent.offsetWidth; // DOM reflow
                 modalContent.classList.add('flash-error');
-                
+
                 inputField.value = '';
                 inputField.focus();
             }
